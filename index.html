@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Vue.js PLC Dropdown</title>
+  <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.js"></script>
+  <style>
+    /* Sidebar styles */
+    .sidebar {
+      height: 100%;
+      width: 200px;
+      position: fixed;
+      top: 0;
+      left: 0;
+      background-color: #111;
+      padding-top: 20px;
+    }
+
+    .sidebar a {
+      display: block;
+      color: white;
+      padding: 16px;
+      text-decoration: none;
+    }
+
+    .sidebar a:hover {
+      background-color: #ddd;
+      color: black;
+    }
+
+    /* Main content styles */
+    .main {
+      margin-left: 200px; /* Same as the width of the sidebar */
+      padding: 20px;
+    }
+
+    table {
+      border-collapse: collapse;
+      width: 100%;
+    }
+
+    th, td {
+      border: 1px solid black;
+      padding: 8px;
+      text-align: left;
+    }
+
+    
+    /* Navbar styles */
+    .navbar {
+      background-color: #333;
+      overflow: hidden;
+      width: 100%;
+      position: fixed; /* Position the navbar as fixed */
+      top: 0; /* Place the navbar at the top */
+      left: 200px; /* Align with the sidebar */
+      z-index: 2; /* Add z-index to position the navbar above the main content */
+    }
+
+    .navbar a {
+      float: left;
+      display: block;
+      color: white;
+      text-align: center;
+      padding: 14px 16px;
+      text-decoration: none;
+    }
+
+    .navbar a:hover {
+      background-color: #ddd;
+      color: black;
+    }
+
+
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div class="sidebar">
+      <p>User ID: {{ userID }}</p>
+      <p>Token: {{ userToken }}</p>
+    </div>
+    <div class="navbar">
+        <a href="#" @click="selectedLevel = 'Level 5 ERP'">Level 5 ERP</a>
+        <a href="#" @click="selectedLevel = 'Level 4 WMS'">Level 4 WMS</a>
+        <a href="#" @click="selectedLevel = 'Level 4 MES'">Level 4 MES</a>
+        <a href="#" @click="selectedLevel = 'Level 3 SCADA/ HMI'">Level 3 SCADA/ HMI</a>
+        <a href="#" @click="selectedLevel = 'Level 2 PLC'">Level 2 PLC</a>
+        <a href="#" @click="selectedLevel = 'Level 1 Sensor and Actuator'">Level 1 Sensor and Actuator</a>
+      </div>
+
+    <div class="main" style="margin-top:50px;">
+      <div v-for="(plc, plcIndex) in plcItems" :key="plcIndex">
+        <div>
+          <button @click="toggleDropdown(plcIndex)">{{ plc.name }}</button>
+          <button @click="deletePLC(plcIndex)">Delete PLC</button>
+          <button @click="editPLCToken(plc)">Edit Token</button>
+        </div>
+        <form v-if="plc.editingToken" @submit.prevent="savePLCToken(plc)">
+          <label for="newToken">New Token:</label>
+          <input v-model="plc.newToken" id="newToken" required>
+          <button type="submit">Save</button>
+          <button @click="cancelEditPLCToken(plc)">Cancel</button>
+        </form>
+        <table v-if="plc.showDropdown">
+          <thead>
+            <tr>
+              <th>Address</th>
+              <th>Description</th>
+              <th>Token</th>
+              <th>PLC ID</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="(address, addressIndex) in plc.addresses" :key="addressIndex">
+              <td>{{ address.name }}</td>
+              <td v-if="!address.editing">{{ address.description }}</td>
+              <td v-else><input v-model="address.description" @keyup.enter="saveAddress(address)" @blur="saveAddress(address)" placeholder="Address description"></td>
+              <td>{{ plc.token }}</td>
+              <td>{{ plc.id }}</td>
+              <td>
+                <button @click="deleteAddress(plcIndex, addressIndex)">Delete</button>
+                <button v-if="!address.editing" @click="editAddress(address)">Edit</button>
+                <template v-else>
+                  <button @click="saveAddress(address)">Save</button>
+                  <button @click="cancelEdit(address)">Cancel</button>
+                </template>
+              </td>
+            </tr>
+          </tbody>
+          <tfoot>
+            <tr>
+              <td>
+                <input v-model="newAddress.name" placeholder="Address name">
+              </td>
+              <td>
+                <input v-model="newAddress.description" placeholder="Address description">
+              </td>
+              <td>
+                {{ plc.token }}
+              </td>
+              <td>
+                {{ plc.id }}
+              </td>
+              <td>
+                <button @click="addAddress(plcIndex)">Add Address</button>
+              </td>
+            </tr>
+          </tfoot>
+        </table>
+        <hr>
+      </div>
+      <div>
+        <input v-model="newPLCName" placeholder="PLC name">
+        <input v-model="newPLCToken" placeholder="PLC token">
+        <button @click="addPLC">Add PLC</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Create the Vue instance
+    const app = new Vue({
+      el: '#app',
+      data: {
+        userID: 'User123', // Replace 'User123' with your user ID
+        userToken: 'UserToken123', // Replace 'UserToken123' with your user token
+        plcItems: [
+          {
+            id: 1,
+            name: 'PLC 1',
+            token: 'Token 1',
+            editingToken: false,
+            newToken: '',
+            showDropdown: false,
+            addresses: [
+              { name: 'Address 1', description: 'Description for Address 1', editing: false },
+              { name: 'Address 2', description: 'Description for Address 2', editing: false },
+              // Add more addresses with descriptions here
+            ],
+          },
+          {
+            id: 2,
+            name: 'PLC 2',
+            token: 'Token 2',
+            editingToken: false,
+            newToken: '',
+            showDropdown: false,
+            addresses: [
+              { name: 'Address 1', description: 'Description for Address 1 in PLC 2', editing: false },
+              { name: 'Address 2', description: 'Description for Address 2 in PLC 2', editing: false },
+              // Add more addresses with descriptions here
+            ],
+          },
+          // Add more PLC items here as needed
+        ],
+        newPLCName: '',
+        newPLCToken: '',
+        newAddress: { name: '', description: '' },
+      },
+      methods: {
+        toggleDropdown(plcIndex) {
+          this.plcItems[plcIndex].showDropdown = !this.plcItems[plcIndex].showDropdown;
+        },
+        deletePLC(plcIndex) {
+          this.plcItems.splice(plcIndex, 1);
+        },
+        addPLC() {
+          if (this.newPLCName.trim() !== '' && this.newPLCToken.trim() !== '') {
+            this.plcItems.push({
+              id: this.plcItems.length + 1,
+              name: this.newPLCName,
+              token: this.newPLCToken,
+              editingToken: false,
+              newToken: '',
+              showDropdown: false,
+              addresses: [],
+            });
+            this.newPLCName = '';
+            this.newPLCToken = '';
+          }
+        },
+        addAddress(plcIndex) {
+          if (this.newAddress.name.trim() !== '' && this.newAddress.description.trim() !== '') {
+            this.plcItems[plcIndex].addresses.push({
+              name: this.newAddress.name,
+              description: this.newAddress.description,
+              editing: false,
+            });
+            this.newAddress = { name: '', description: '' };
+          }
+        },
+        deleteAddress(plcIndex, addressIndex) {
+          this.plcItems[plcIndex].addresses.splice(addressIndex, 1);
+        },
+        editAddress(address) {
+          address.editing = true;
+        },
+        saveAddress(address) {
+          address.editing = false;
+        },
+        cancelEdit(address) {
+          address.editing = false;
+        },
+        editPLCToken(plc) {
+          plc.editingToken = true;
+          plc.newToken = plc.token;
+        },
+        savePLCToken(plc) {
+          plc.token = plc.newToken;
+          plc.editingToken = false;
+          plc.newToken = '';
+        },
+        cancelEditPLCToken(plc) {
+          plc.editingToken = false;
+          plc.newToken = '';
+        },
+      },
+    });
+  </script>
+</body>
+</html>
